@@ -1,60 +1,49 @@
-DELIMITER //
+/*
+Procedimiento 1, Registro de jugador:
+ Automatizar el proceso de registro de un nuevo jugador en la base de datos,
+ asignarle su primera partida 
+ y generar su primera inscripción en el sistema.
+ */
+DELIMITER $$
 
-CREATE PROCEDURE sp_registrar_jugador(
-  IN p_nombre       VARCHAR(100),
-  IN p_email        VARCHAR(100),
-  IN p_id_juego_ini INT           -- por ejemplo, el ID del juego asignado en la primera partida
-)
+CREATE PROCEDURE sp_registrar_jugador (IN nombre_jugador_registro VARCHAR(60),
+									   IN id_partida_registro INT)
 BEGIN
-  DECLARE v_jugador_id INT;
-  DECLARE v_partida_id INT;
+	IF NOT EXISTS ( SELECT * 
+					FROM jugador 
+					WHERE nombre_jugador = nombre_jugador_registro) 
+	THEN 
+		INSERT INTO jugador(nombre_jugador) 
+		VALUES (nombre_jugador_registro);
+	END IF;
 
-  START TRANSACTION;
-    -- 1) Nuevo jugador
-    INSERT INTO jugadores(nombre, email, fecha_registro)
-    VALUES (p_nombre, p_email, NOW());
-    SET v_jugador_id = LAST_INSERT_ID();
-
-    -- 2) Primera partida
-    INSERT INTO partidas(id_jugador, id_juego, fecha_partida)
-    VALUES (v_jugador_id, p_id_juego_ini, NOW());
-    SET v_partida_id = LAST_INSERT_ID();
-
-    -- 3) Inscripción inicial
-    INSERT INTO inscripciones(id_jugador, id_partida, fecha_inscripcion)
-    VALUES (v_jugador_id, v_partida_id, NOW());
-  COMMIT;
-
-  -- 4) Retornamos IDs para confirmación
-  SELECT
-    v_jugador_id AS nuevo_jugador_id,
-    v_partida_id AS nueva_partida_id;
+	IF NOT EXISTS ( SELECT * 
+					FROM JUEGA 
+					WHERE nombre_jugador = nombre_jugador_registro 
+					AND id_partida = id_partida_registro)
+	THEN 
+		INSERT INTO JUEGA(nombre_jugador, id_partida)
+		VALUES (nombre_jugador_registro, id_partida_registro);
+	END IF;
 END
-//
+$$
 
-DELIMITER ;
 
-DELIMITER //
-
-CREATE PROCEDURE sp_listar_juegos_con_expansiones()
+/*
+Procedimiento 2, Listado de juegos y expansiones:
+ Crear un procedimiento almacenado que liste todos los juegos junto con sus expansiones,
+ presentando la lista de expansiones separada por comas 
+ y mostrando el coste de cada una entre paréntesis.
+ */
+CREATE PROCEDURE sp_listado_juegos_expansiones ()
 BEGIN
-  SELECT
-    j.id_juego,
-    j.nombre           AS juego,
-    COALESCE(
-      GROUP_CONCAT(
-        CONCAT(e.nombre, ' (', FORMAT(e.costo, 2), ')')
-        ORDER BY e.nombre
-        SEPARATOR ', '
-      ),
-      '— sin expansiones —'
-    ) AS expansiones
-  FROM juegos AS j
-  LEFT JOIN expansiones AS e
-    ON e.id_juego = j.id_juego
-  GROUP BY j.id_juego, j.nombre
-  ORDER BY j.nombre;
+	SELECT juego.nombre_juego, 
+	   GROUP_CONCAT(CONCAT(expansion.nombre_expansion, ' (', copia_expansion.coste_expansion, '€)')) as expansiones
+	FROM juego
+	JOIN expansion ON juego.nombre_juego=expansion.nombre_juego
+	JOIN copia_expansion ON expansion.nombre_expansion=copia_expansion.nombre_expansion
+	GROUP BY juego.nombre_juego;
 END
-//
+$$
 
-DELIMITER ;
+DELIMITER 
