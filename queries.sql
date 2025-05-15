@@ -29,7 +29,8 @@ SELECT organiza.nombre_personal, COUNT(nombre_juego) as num_juegos
 FROM organiza
 INNER JOIN partida ON organiza.id_partida=partida.id_partida
 GROUP BY organiza.nombre_personal
-HAVING num_juegos > 3;
+HAVING num_juegos > 3; 
+# Como el máximo de juegos distintos que ha supervisado una persona es 2 no sale nada.
 
 # 9. Jugador más activo: Determina qué jugador ha participado en el mayor número de partidas.
 SELECT nombre_jugador, COUNT(id_partida) as num_partidas
@@ -40,16 +41,20 @@ LIMIT 1;
 
 # 12. Organizadores selectivos: Lista el personal que ha organizado partidas 
 # en las que se ha utilizado la expansión «Modo Blitz» pero no la expansión «Edición Limitada».
-SELECT nombre_personal
+
+# Imagino que se refiere a que en esa partida específica ha usado 'Modo Blitz' pero no 'Edición Limitada'
+# y que no se refiere a que ha organizado alguna partida con 'Modo Blitz' pero ningunA con 'Edición Limitada'.
+
+SELECT DISTINCT(organiza.nombre_personal)
 FROM organiza
-WHERE nombre_personal IN(
-						SELECT organiza.nombre_personal 
-                        FROM organiza INNER JOIN utiliza ON organiza.id_partida = utiliza.id_partida
-                        WHERE utiliza.nombre_expansion = 'Modo Blitz'
+WHERE organiza.id_partida IN(
+                        SELECT utiliza.id_partida
+						FROM utiliza
+						WHERE utiliza.nombre_expansion = 'Modo Blitz'
                         )
-AND nombre_personal NOT IN(
-						SELECT organiza.nombre_personal 
-                        FROM organiza INNER JOIN utiliza ON organiza.id_partida = utiliza.id_partida
+AND organiza.id_partida NOT IN(
+						SELECT utiliza.id_partida
+                        FROM utiliza
                         WHERE utiliza.nombre_expansion = 'Edición Limitada'
                         );
                         
@@ -60,8 +65,34 @@ SELECT DISTINCT(juega1.nombre_jugador)
 FROM juega AS juega1
 JOIN partida AS partida1 ON juega1.id_partida=partida1.id_partida
 JOIN organiza AS organiza1 ON partida1.id_partida = organiza1.id_partida
-JOIN juega AS juega2
+JOIN juega AS juega2 ON juega1.nombre_jugador = juega2.nombre_jugador
 JOIN partida AS partida2 ON juega2.id_partida=partida2.id_partida
 JOIN organiza AS organiza2 ON partida2.id_partida=organiza2.id_partida
-WHERE partida1.nombre_juego = 'Catan' AND partida2.nombre_juego = 'Ticket to Ride' 
-AND organiza1.fecha < organiza2.fecha
+WHERE partida1.nombre_juego = 'Catan' 
+	  AND partida2.nombre_juego = 'Ticket to Ride'
+      AND (
+			(organiza1.fecha < organiza2.fecha) 
+            OR
+			(organiza1.fecha = organiza2.fecha AND organiza1.hora < organiza2.hora)
+		  );
+      
+# 15 Ajedrez con expansiones: Encuentra a los jugadores que han participado en partidas de «Ajedrez»
+# donde la suma del coste de las expansiones utilizadas fue menor que 55.
+
+# La únicas expansiones que tiene el ajedrez son: "Modo Blitz", que cuesta 2095€; y "Edición Limitada", que cuesta 9999€.
+# Entonces solo solo salen los jugadores que juegan partidas de ajedrez sin expansiones (0 € de expansiones).
+
+SELECT juega.nombre_jugador
+FROM juega
+INNER JOIN (
+		SELECT partida.id_partida, 
+			   COALESCE(sum(copia_expansion.coste_expansion),0) AS suma_coste
+		FROM partida
+		LEFT JOIN utiliza ON partida.id_partida = utiliza.id_partida
+		LEFT JOIN copia_expansion ON (copia_expansion.nombre_expansion = utiliza.nombre_expansion AND copia_expansion.id_expansion=utiliza.id_expansion)
+		WHERE partida.nombre_juego = "Ajedrez" 
+		GROUP BY partida.id_partida
+        ) AS coste_expansiones_partida ON juega.id_partida=coste_expansiones_partida.id_partida
+WHERE coste_expansiones_partida.suma_coste < 55;
+        
+
